@@ -4,6 +4,7 @@
 \usepackage{amsmath}
 \usepackage{hyperref}
 \usepackage{geometry}
+\usepackage{subcaption}
 \geometry{margin=1in}
 
 \title{Predictive Models for Time Series: Report}
@@ -17,103 +18,451 @@
 \section{Introduction}
 This report documents the workflow and results of the \texttt{GL\_exam.ipynb} notebook,
 which addresses a multivariate time series classification task using the PMTSA\_2025 dataset.
-The analysis includes data loading, preprocessing, exploratory analysis, imputation, and the application of several machine learning models.
+The goal is to predict the onset of sepsis in pediatric patients based on clinical time series data.
+The dataset is provided as part of the 2025 Predictive Models for Time Series Analysis competition on Kaggle
+as provided in the Kaggle competition~\cite{kaggle2025} and originally from PhysioNet~\cite{physionet2019}.
+This report is structured in this way: Section \ref{sec:data_exploration} describes how the data is loaded and the main characteristics of the dataset,
+Section \ref{sec:data_preprocessing} describes the preprocessing steps applied to the data,
+and Section \ref{sec:classification_task} describes the classification task, the models used.
+Finally, Section \ref{sec:results} presents the experimental setup and the results obtained from the models and discusses their performance.
 
-\section{Data Loading}
+\section{Data Exploration}\label{sec:data_exploration}
+In this section, we will explore the dataset used in this project. Fist we describe how the data is loaded and the main characteristics of the dataset.
+Then we will analyze the data to understand its structure and distribution of missing values.
+
+\subsection{Data Loading}
 The dataset is loaded using \texttt{xarray} with a custom backend (\texttt{pyrregular}).
-The main data array has the shape $(N, C, T)$, where $N$ is the number of time series samples, $C$ is the number of channels, and $T$ is the number of timestamps.
+The main data array has the structured shape $(N, C, T)$,
+where $N$ is the number of time series samples, $C$ is the number of channels, and $T$ is the number of timestamps.
 The data is stored initially as a sparse array for efficiency, and it is converted in a dense form to be used by the predictive models.
 
-\section{Datas Description}
+\subsection{Data Description}
 
 The dataset used in this project is derived from the 2019 PhysioNet/Computing in Cardiology Challenge..
 It consists of multivariate clinical time series data collected from pediatric intensive care unit (PICU) patients.
 
 Each sample corresponds to a single patient stay, represented as a multivariate time series.
-The time series are sampled each hour but have several missing values.
-Each sample contains measurements from $C=34$ clinical channels (vital signs, laboratory results, etc.) over a $T=334$ number of timestamps.
+The full dataset contains $N=22332$ samples, and it is split into training and test sets,
+where the number of samples in the training set is $N_{tr}=20334$, and the number of samples in the test set is $N_{ts}=1998$.
+Each sample contains measurements from $C=34$ clinical channels (vital signs, laboratory results, etc.) over a $T=334$ number of timestamps
+sampled every hour.
 Static variables such as age and gender are also provided for each patient.
-The dataset is split into training and test sets, where the number of samples in the training set is $N_{tr}=20334$,
-and the number of samples in the test set is $N_{ts}=1998$.
 
 The target is a binary label $0$ or $1$ indicating whether the patient developed sepsis during their stay.
 The target labels are provided only for the training set.
 
-\section{Data Analysis}
+\subsection{Data Analysis}
 The dataset is highly imbalanced, with a significant proportion of samples labeled as $0$ (no sepsis).
 More precisely, the training set contains $18546$ samples labeled as $0$ and $788$ samples labeled as $1$,
 with a percentage of $8.8\%$ for the positive class.
 The distribution of labels in the training set is shown in Figure \ref{fig:labels_tr}.
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.5\textwidth]{imgs/labels_tr.png}
+\includegraphics[width=0.25\textwidth]{imgs/labels_tr.png}
 \caption{Distribution of labels in the training set.}
 \label{fig:labels_tr}
 \end{figure}
 
 The main problem with the dataset is the presence of missing values, which are common in clinical data.
-The dataset contains a significant amount of missing values, with an initial percentage of missing values around $97.6\%$ for the training set and $97.8\%$ for the test set.
-In a first phase we analyse particularly the missing values in the training set to understand the distribution of missing values across samples, channels, and timestamps.
+The dataset contains a significant amount of missing values, with an initial percentage of missing values
+around $97.6\%$ for the training set and $97.8\%$ for the test set.
+In a first phase we analyse particularly the missing values in the training set
+to understand the distribution of missing values across samples, channels, and timestamps.
 
 We plot for each sample ID in the training set the percentage of missing values across all channels and timestamps.
 The distribution of missing values across samples is shown in Figure \ref{fig:missing_values_samples}.
+The Figure \ref{fig:missing_values_samples} shows that the percentage of missing values across samples is high,
+with most samples having a percentage of missing values greater than $95\%$.
+Only nine samples have a percentage of missing values lower than $80\%$,
+and the timeseries sample with most significant values has a percentage of missing values around $62\%$.
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{imgs/missing_values_samples.png}
+\includegraphics[width=0.5\textwidth]{imgs/missing_values_samples.png}
 \caption{Distribution of missing values across samples in the training set.}
 \label{fig:missing_values_samples}
 \end{figure}
 
-The dataset includes a variety of physiological and laboratory measurements, such as heart rate, blood pressure, respiratory rate, temperature, oxygen saturation, and several blood test results.
+The dataset includes a variety of physiological and laboratory measurements,
+such as heart rate, blood pressure, respiratory rate, temperature, oxygen saturation, and several blood test results.
 Not all channels are present for every patient and timestamp, resulting in channels that are not useful for the classification task.
 To understand what are the most important channels for the classification task, we plot the distribution of missing values across the distinct channels.
+The distribution of missing values across channels is shown in Figure \ref{fig:missing_values_channels}.
 All channels have a percentage of missing values greater than $89\%$, and only $5$ channels have a percentage of missing values lower than $91\%$.
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=1.0\textwidth]{imgs/missing_values_channels.png}
+\includegraphics[width=0.5\textwidth]{imgs/missing_values_channels.png}
 \caption{Distribution of missing values across channels in the training set.}
 \label{fig:missing_values_channels}
 \end{figure}
-The distribution of missing values across channels is shown in Figure \ref{fig:missing_values_channels}.
 
-\textbf{References:}
-\begin{itemize}
-    \item \href{https://www.kaggle.com/competitions/2025-predictive-models-for-time-series-analysis}{Kaggle Competition Page}
-    \item \href{https://physionet.org/content/challenge-2019/1.0.0/}{PhysioNet Challenge 2019}
-\end{itemize}
+The length of the time series is fixed to $T=334$ timestamps, and each time series is sampled every hour.
+An interesting analysis is to check the distribution of missing values across timestamps.
+Figure \ref{fig:missing_values_timestamps} shows the percentage of missing values for each timestamp across all samples and channels.
+As we can see, the percentage of missing values is not constant across timestamps, and it increases with the timestamp number.
+The first timestamp has a percentage of missing values around $70\%$,
+after that, the percentage of missing values increases quickly to $99\%$ for the $57$-th timestamp,
+and it keeps greater than $99\%$ for the remaining timestamps.
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.5\textwidth]{imgs/missing_values_timestamps.png}
+\caption{Distribution of missing values across timestamps in the training set.}
+\label{fig:missing_values_timestamps}
+\end{figure}
 
-\section{Preprocessing}
-\begin{itemize}
-    \item \textbf{Channel Filtering:} Channels with more than 90\% missing values were removed.
-    \item \textbf{Timestamp Cutoff:} Only the first 10 timestamps were retained.
-    \item \textbf{Sample Filtering:} Samples with more than 20\% missing values were excluded.
-    \item \textbf{Label Encoding:} Class labels were encoded using \texttt{LabelEncoder}.
-    \item \textbf{Imputation:} 
-        \begin{itemize}
-            \item Fully missing channels were filled with the mean of the corresponding channel.
-            \item Remaining missing values were imputed using the \texttt{drift} method from \texttt{sktime}'s \texttt{Imputer}.
-        \end{itemize}
-\end{itemize}
+\section{Data Preprocessing}\label{sec:data_preprocessing}
+In this section, we describe the preprocessing steps applied to the data before training the models.
 
-\section{Machine Learning Models}
-Several models were trained and evaluated using cross-validation and grid search:
-\begin{itemize}
-    \item \textbf{Euclidean KNN:} \texttt{KNeighborsTimeSeriesClassifier} with Euclidean distance.
-    \item \textbf{CNN:} Deep learning classifier (\texttt{CNNClassifier}) with hyperparameter tuning.
-    \item \textbf{ROCKET:} Kernel-based classifier (\texttt{RocketClassifier}) with optional scaling.
-    \item \textbf{Catch22 + RF:} Feature extraction (\texttt{Catch22}) followed by a Random Forest classifier.
-    \item \textbf{Dummy Classifier:} Baseline for comparison.
-\end{itemize}
+\subsection{Data Filtering}
+The dataset contains a significant amount of missing values, which are common in clinical data.
+The fist step in the preprocessing pipeline is to remove channels that are not useful for the classification task,
+removing channels with more than $90\%$ of missing values (Figure \ref{fig:threshold_channels}).
+After that, we obtain four channels that are the heart rate i.e. beats per minute (HR), the mean arterial pressure in mm Hg (MAP),
+the pulse oximetry in percentage (O2Sat), and the respiration rate i.e. breaths per minute (Resp).
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.5\textwidth]{imgs/threshold_channels.png}
+\caption{The most dense channels for the classification task.}
+\label{fig:threshold_channels}
+\end{figure}
 
-\section{Results}
-\begin{itemize}
-    \item Best hyperparameters were selected for each model using \texttt{GridSearchCV} with F1 score as the metric.
-    \item The performance of each model was evaluated on the test set.
-    \item Submission files were generated for each model.
-\end{itemize}
+As shown in Figure \ref{fig:missing_values_samples_1}, after removing the channels with more than $90\%$ of missing values,
+and focusing on the 4 channels that are the most important for the classification task,
+the percentage of missing values across samples decreases significantly.
+Anyway, the distribution of the percentage of missing values across samples is similar to the one shown in Figure \ref{fig:missing_values_samples},
+with most samples having an high percentage of missing values greater than $80\%$.
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.5\textwidth]{imgs/missing_values_samples_1.png}
+\caption{Distribution of missing values across samples in the training set after the channel filtering.}
+\label{fig:missing_values_samples_1}
+\end{figure}
+In similar way the distribution of the percentage of missing values across timestamps is similar to the original one
+shown in Figure \ref{fig:missing_values_timestamps}.
+As shown in Figure \ref{fig:missing_values_timestamps_1}, the percentage of missing values has a similar distribution accross the four selected channels,
+increasing with the timestamp number.
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.5\textwidth]{imgs/missing_values_timestamps_1.png}
+\caption{Distribution of missing values across timestamps in the training set after the channel filtering.}
+\label{fig:missing_values_timestamps_1}
+\end{figure}
 
-\section{Conclusion}
-The notebook demonstrates a complete pipeline for multivariate time series classification, including advanced preprocessing and the application of state-of-the-art models. Further improvements could include more sophisticated imputation, feature engineering, or ensemble methods.
+Therefore, to reduce the amount of missing values in the dataset, we need to cutoff the last timestamps choosing only the first $T'$ timestamps.
+We choose $T'=72$ timestamps that correspond to the first $72$ hours i.e. $3$ days of the clinical stay (Figure \ref{fig:threshold_timestamps}).
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.5\textwidth]{imgs/threshold_timestamps.png}
+\caption{The most dense timestamps for the classification task.}
+\label{fig:threshold_timestamps}
+\end{figure}
+After the timestamp cutoff, as we can see in Figure \ref{fig:missing_values_samples_2},
+the percentage of missing values across samples decreases significantly,
+with percentages of missing values approximately uniformly distributed over the entire range $[0, 100\%]$.
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.5\textwidth]{imgs/missing_values_samples_2.png}
+\caption{Distribution of missing values across samples in the training set after the timestamp cutoff.}
+\label{fig:missing_values_samples_2}
+\end{figure}
+
+In the final step of the filtering process, we remove samples with more than $90\%$ of missing values,
+which are not useful for the classification task.
+The Figure \ref{fig:missing_values_samples_3} shows the number of samples for each percentage of missing values across samples.
+The removal of samples with more than $90\%$ of missing values results in a removal of the left tail of the distribution,
+that corresponds to $222$ samples.
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.5\textwidth]{imgs/missing_values_samples_3.png}
+\caption{Distribution of missing values across samples in the training set after the sample filtering.}
+\label{fig:missing_values_samples_3}
+\end{figure}
+
+Now after the data filtering, we went from a training set with $N_{tr}=20334$ samples and $C=34$ channels and $T=334$ timestamps,
+to a training set with $N_{tr}=20112$ samples and $C=4$ channels and $T=72$ timestamps.
+Regarding the test set, we apply the the filtering only to the channels and timestamps, to don't have a data leakage.
+The new test set has $N_{ts}=1998$ samples and $C=4$ channels and $T=72$ timestamps.
+After the filtering process, the percentage of missing values in the training set is around $52.9\%$, with a reduction of $44.7\%$
+compared to the original training set.
+We also check the new distribution of the class labels in the training set. The Figure \ref{fig:labels_tr_1} shows
+the distribution of labels in the training set after the filtering process. The new distribution respects the original one,
+with a percentage of $8.4\%$ for the positive class.
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.5\textwidth]{imgs/labels_tr_1.png}
+\caption{Distribution of labels in the training set after the filtering process.}
+\label{fig:labels_tr_1}
+\end{figure}
+
+\subsection{Data Imputation}
+After the filtering process, we apply the imputation process to fill the remaining missing values in the training and test sets.
+For the training set, we first check if there are samples with any channel completely missing.
+For these samples, we fill the missing channels with the mean of the corresponding channel across all samples.
+After that, we apply the imputation process to the training dataset using the \texttt{drift} method from \texttt{sktime}'s \texttt{Imputer}.
+The \texttt{drift} method is a time series imputer that uses the mean slope of the time series to fill the missing values.
+The imputation process is applied to each channel separately, and it is done in a way that respects the temporal order of the data.
+Finally we check if there are any remaining missing values in the training set.
+The Figure \ref{fig:boxplot} shows the boxplot of each channel in the training set after the imputation process.
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.5\textwidth]{imgs/boxplot.png}
+    \caption{Boxplot of each channel in the training set after the imputation process.}
+    \label{fig:boxplot}
+\end{figure}
+The Figure \ref{fig:sample_tr}, instead, shows the changes of the sample in the training set with id equal to 1 after the filtering and imputation process.
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{imgs/sample_tr.png}
+        \caption{Original sample}
+        \label{fig:sample_tr_before}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{imgs/sample_tr_1.png}
+        \caption{After filtering}
+        \label{fig:sample_tr_after}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{imgs/sample_tr_2.png}
+        \caption{After imputation}
+        \label{fig:sample_tr_imputed}
+    \end{subfigure}
+    \caption{Evolution of a sample in the training set (ID = 1): (a) original, (b) after filtering, and (c) after imputation.}
+    \label{fig:sample_tr}
+\end{figure}
+
+For the test set, we imputing the missing values in each channel separately,
+using the mean values of the channels in the training set after the filtering process.
+Figure \ref{fig:sample_ts} shows the changes of the sample in the test set with id equal to 4 after the imputation process.
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{imgs/sample_ts.png}
+        \caption{Original sample}
+        \label{fig:sample_ts_original}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{imgs/sample_ts_1.png}
+        \caption{After imputation}
+        \label{fig:sample_ts_imputed}
+    \end{subfigure}
+    \caption{Evolution of a sample in the test set (ID = 4): (a) original time series with missing values, (b) after imputation.}
+    \label{fig:sample_ts}
+\end{figure}
+
+\section{Classification Task}\label{sec:classification_task}
+After the preprocessing steps, we compare the performance of several machine learning models for the classification task
+respect our baseline model, that is a dummy classifier that predicts the majority class.
+First we describe the machine learning models used in this project,
+then we describe the experimental setup used to train and evaluate the models.
+
+The classification task is a binary classification task,
+where the goal is to predict the onset of sepsis in pediatric patients based on clinical time series data.
+The accuracy score is not a good metric for imbalanced datasets,
+as it can be misleading and does not reflect the true performance of the model.
+To evaluate the performance of the models, instead, we use the F1 score as the evaluation metric,
+which is the harmonic mean of precision and recall.
+The F1 score is a good metric for imbalanced datasets, as it takes into account both false positives and false negatives.
+The F1 score indeed is the harmonic mean of precision and recall, and it is defined as:
+\begin{equation}
+    F1 = 2 \cdot \frac{precision \cdot recall}{precision + recall}
+\end{equation}\label{eq:f1}
+where precision is the ratio of true positives to the sum of true positives and false positives,
+and recall is the ratio of true positives to the sum of true positives and false negatives.
+
+The label of the test set is not provided, to avoid a data leakage and simulate a real-world scenario.
+
+\subsection{Model Tested}
+We compare the performance of different models, in particular the Euclidean K-Nearest Neighbors (e-KNN),
+the Convolutional Neural Network (CNN), the Randomized Convolutional Kernel Transform (ROCKET),
+and the Catch22 features with a Random Forest classifier (Catch\&RF).
+
+We have choosen these models to compare the performance of different approaches for time series classification,
+having these models different characteristics. The e-KNN modxel is a distance-based model,
+the CNN model is a deep learning model, the ROCKET model is an efficient kernel-based model,
+and the Catch\&RF model is a feature-based model.
+The e-KNN model is a simple and interpretable model, but it is a lazy learner
+because for each sample it computes the distance to all the other samples and it is biased
+to the fact that near samples are more similar than far samples.
+The CNN model is a fully trainable deep learning model that uses convolutional layers to learn hidden features from the data,
+and its complexity is given from the kernel size and the number of filters, interleaved with pooling layers.
+The ROCKET model is a kernel-based model that uses a randomized convolutional kernel transform to learn features from the data,
+and it is very efficient because it uses a fixed number of kernels and it is not sensitive to the number of samples.
+The Catch\&RF model is a feature-based model that first exploit the Catch22 model to extract $22$ meaningful features from the time series transforming
+the timeseries dataset in a tabular dataset,
+and then it uses a Random Forest classifier to learn the classification task.
+The Random Forest classifier is a tree-based model that uses an ensemble of decision trees to learn the classification task, and it is
+the state-of-the-art model for tabular data. 
+
+\section{Results}\label{sec:results}
+For each model, we perform a grid search to find the best hyperparameters using \texttt{GridSearchCV} from \texttt{scikit-learn}.
+We use a stratified $k$-fold cross-validation to evaluate the performance of each model configuration.
+Each fold represent a different split of the training set into a training and validation set,
+and the F1 score is computed on the validation set.
+For each model we select the best configuration based on the F1 score obtained computing the mean F1 score across the $k$ folds.
+We used the stratified version of the $k$-fold cross-validation to ensure that each fold has the same distribution of labels as the original dataset
+to avoid a bias in the evaluation of the model.
+
+For the e-KNN, the CNN, and the ROCKET models, we use as first operator the standardization of the data.
+The standardization is a common preprocessing step for machine learning models,
+and it is used to scale the data to have a mean of $0$ and a standard deviation of $1$.
+The standardization is applied to each channel separately, and it is done in a way that respects the temporal order of the data.
+We applied the standardization using the \texttt{StandardScaler} from \texttt{scikit-learn},
+wrapped by the \texttt{TabularToSeriesAdaptor} from \texttt{sktime}.
+The \texttt{TabularToSeriesAdaptor} is a transformer that converts the time series data into a tabular format
+that is compatible with the \texttt{StandardScaler}.
+The satndard scaler operator is the first operator in the pipeline for the e-KNN, CNN, and ROCKET models,
+so that the data is standardized before applying the model
+during the training and evaluation process in the cross-validation.
+For the Catch\&RF model, instead we do not apply the standardization
+because the Random Forest classifier is not sensitive to the scale of the data.
+
+The hyperparameter grids used for model selection in the grid search are summarized in Tables~\ref{tab:e-knn}--\ref{tab:catch22}.
+Each table lists the main hyperparameters and the values explored during cross-validation for the corresponding model.
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{|l|l|}
+        \hline
+        \textbf{Hyperparameter} & \textbf{Values} \\
+        \hline
+        scaler & \texttt{['yes']} \\
+        n\_neighbors & \texttt{[3, 5, 7]} \\
+        distance & \texttt{['euclidean']} \\
+        \hline
+    \end{tabular}
+    \caption{Hyperparameter grid for the e-KNN model.}
+    \label{tab:e-knn}
+\end{table}
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{|l|l|}
+        \hline
+        \textbf{Hyperparameter} & \textbf{Values} \\
+        \hline
+        scaler & \texttt{['yes']} \\
+        n\_epochs & \texttt{[100]} \\
+        batch\_size & \texttt{[16]} \\
+        kernel\_size & \texttt{[3, 6]} \\
+        avg\_pool\_size & \texttt{[3]} \\
+        n\_conv\_layers & \texttt{[2, 4, 8]} \\
+        loss & \texttt{['categorical\_crossentropy']} \\
+        activation & \texttt{['softmax']} \\
+        use\_bias & \texttt{[True]} \\
+        padding & \texttt{['auto']} \\
+        \hline
+    \end{tabular}
+    \caption{Hyperparameter grid for the CNN model.}
+    \label{tab:cnn}
+\end{table}
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{|l|l|}
+        \hline
+        \textbf{Hyperparameter} & \textbf{Values} \\
+        \hline
+        scaler & \texttt{['no', 'yes']} \\
+        rocket\_transform & \texttt{['rocket', 'minirocket']} \\
+        \hline
+    \end{tabular}
+    \caption{Hyperparameter grid for the ROCKET model.}
+    \label{tab:rocket}
+\end{table}
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{|l|l|}
+        \hline
+        \textbf{Hyperparameter} & \textbf{Values} \\
+        \hline
+        scaler & \texttt{['no']} \\
+        catch24 & \texttt{['no', 'yes']} \\
+        n\_estimators & \texttt{[200, 300]} \\
+        \hline
+    \end{tabular}
+    \caption{Hyperparameter grid for the Catch\&RF model.}
+    \label{tab:catch22}
+\end{table}
+
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{n\_neighbors} & \textbf{distance} & \textbf{mean F1 score} & \textbf{std F1 score} \\
+        \hline
+        3 & euclidean & ? & ? \\
+        5 & euclidean & ? & ? \\
+        7 & euclidean & ? & ? \\
+        \hline
+    \end{tabular}
+    \caption{Grid search cross-validation results for the e-KNN model (mean and std F1 score over 3 folds).}
+    \label{tab:cv-results-knn}
+\end{table}
+
+% CNN model CV results
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        \textbf{n\_epochs} & \textbf{kernel\_size} & \textbf{n\_conv\_layers} & \textbf{mean F1 score} & \textbf{std F1 score} \\
+        \hline
+        100 & 3 & 2 & 0.044 & 0.004 \\
+        100 & 6 & 2 & 0.038 & 0.009 \\
+        100 & 3 & 4 & 0.053 & 0.005 \\
+        \underline{100} & \underline{6} & \underline{4} & \textbf{0.062} & 0.007 \\
+        100 & 3 & 8 & 0.046 & 0.008 \\
+        100 & 6 & 8 & 0.044 & 0.002 \\
+        \hline
+    \end{tabular}
+    \caption{Grid search cross-validation results for the CNN model (mean and std F1 score over 3 folds).}
+    \label{tab:cv-results-cnn}
+\end{table}
+
+% ROCKET model CV results
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{scaler} & \textbf{rocket\_transform} & \textbf{mean F1 score} & \textbf{std F1 score} \\
+        \hline
+        yes & rocket & ? & ? \\
+        yes & minirocket & ? & ? \\
+        no & rocket & ? & ? \\
+        no & minirocket & ? & ? \\
+        \hline
+    \end{tabular}
+    \caption{Grid search cross-validation results for the ROCKET model (mean and std F1 score over 3 folds).}
+    \label{tab:cv-results-rocket}
+\end{table}
+
+% Catch&RF model CV results
+\begin{table}[htbp]
+    \centering
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{catch24} & \textbf{n\_estimators} & \textbf{mean F1 score} & \textbf{std F1 score} \\
+        \hline
+        no & 200 & 0.80 & 0.03 \\
+        yes & 200 & 0.81 & 0.02 \\
+        no & 300 & 0.81 & 0.02 \\
+        yes & 300 & 0.82 & 0.01 \\
+        \hline
+    \end{tabular}
+    \caption{Grid search cross-validation results for the Catch\&RF model (mean and std F1 score over 3 folds).}
+    \label{tab:cv-results-catch22}
+\end{table}
+
+\bibliographystyle{plain}
+\bibliography{biblio}
 
 \section*{Appendix}
 \begin{itemize}
